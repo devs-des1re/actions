@@ -1,0 +1,46 @@
+name: releaselog
+description: Build a grouped release changelog from conventional commits and publish it as a GitHub release.
+author: Arjun Patel
+
+inputs:
+  tag:
+    description: Tag to release. Defaults to the tag that triggered the workflow.
+    required: false
+    default: ''
+  previous-tag:
+    description: Explicit previous tag to compare against. Auto-detected from history when empty.
+    required: false
+    default: ''
+  prerelease-branch:
+    description: Target branch used when publishing a pre-release (any tag containing "-").
+    required: false
+    default: dev
+  token:
+    description: GitHub token with contents:write used to create the release.
+    required: false
+    default: ''
+  dry-run:
+    description: When true, render the release notes and skip publishing.
+    required: false
+    default: 'false'
+
+outputs:
+  release-url:
+    description: URL of the created release (empty on dry-run).
+    value: ${{ steps.generate.outputs.release-url }}
+  is-prerelease:
+    description: Whether the release was published as a pre-release.
+    value: ${{ steps.generate.outputs.is-prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - id: generate
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_PREVIOUS_TAG: ${{ inputs.previous-tag }}
+        INPUT_PRERELEASE_BRANCH: ${{ inputs.prerelease-branch }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        GH_TOKEN: ${{ inputs.token || github.token }}
+      run: node "${{ github.action_path }}/scripts/releaselog.mjs"
