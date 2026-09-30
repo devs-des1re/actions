@@ -43,13 +43,31 @@ function resolveTag() {
   return tag;
 }
 
+const SEMVER_RE = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
 function resolvePreviousTag(tag) {
   const explicit = env('INPUT_PREVIOUS_TAG');
   if (explicit) return explicit;
 
-  const described = gitOrNull(['describe', '--tags', '--abbrev=0', `${tag}^`]);
-  if (described && described !== tag) return described;
-  return null;
+  const merged = gitOrNull(['tag', '--merged', `${tag}^`]);
+  if (!merged) return null;
+
+  const candidates = merged
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((candidate) => candidate && candidate !== tag && SEMVER_RE.test(candidate));
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const candidate of candidates) {
+    const count = Number(gitOrNull(['rev-list', '--count', `${candidate}..${tag}`]));
+    if (Number.isFinite(count) && count < bestDistance) {
+      bestDistance = count;
+      best = candidate;
+    }
+  }
+
+  return best;
 }
 
 function parseType(subject) {
