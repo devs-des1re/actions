@@ -43,5 +43,5 @@ jobs:
 
                   - uses: devs-des1re/actions/releaselog@v1
                     with:
-                      token: ${{ secrets.GITHUB_TOKEN }}
+                      token: GITHUB_TOKEN
             ```
