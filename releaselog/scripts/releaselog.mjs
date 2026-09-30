@@ -101,7 +101,7 @@ function buildCompareUrl(previousTag, tag) {
   return `${server}/${repo}/commits/${tag}`;
 }
 
-function buildNotes({ commits, contributors, compareUrl }) {
+function buildNotes({ customMessage, commits, contributors, compareUrl }) {
   const grouped = new Map(SECTION_ORDER.map((section) => [section.key, []]));
   for (const commit of commits) {
     const key = grouped.has(commit.type) ? commit.type : 'other';
@@ -109,6 +109,10 @@ function buildNotes({ commits, contributors, compareUrl }) {
   }
 
   const lines = [];
+
+  if (customMessage) {
+    lines.push(customMessage.trim(), '');
+  }
 
   for (const section of SECTION_ORDER) {
     const items = grouped.get(section.key);
@@ -168,6 +172,7 @@ function main() {
   const isPrerelease = tag.includes('-');
   const branch = env('INPUT_PRERELEASE_BRANCH', 'dev');
   const dryRun = env('INPUT_DRY_RUN', 'false').toLowerCase() === 'true';
+  const customMessage = env('INPUT_CUSTOM_MESSAGE');
 
   const previousTag = resolvePreviousTag(tag);
   const range = previousTag ? `${previousTag}..${tag}` : tag;
@@ -175,7 +180,7 @@ function main() {
   const commits = collectCommits(range);
   const contributors = collectContributors(range);
   const compareUrl = buildCompareUrl(previousTag, tag);
-  const notes = buildNotes({ commits, contributors, compareUrl });
+  const notes = buildNotes({ customMessage, commits, contributors, compareUrl });
 
   process.stdout.write(notes);
 
