@@ -101,14 +101,14 @@ function buildCompareUrl(previousTag, tag) {
   return `${server}/${repo}/commits/${tag}`;
 }
 
-function buildNotes({ tag, commits, contributors, compareUrl }) {
+function buildNotes({ commits, contributors, compareUrl }) {
   const grouped = new Map(SECTION_ORDER.map((section) => [section.key, []]));
   for (const commit of commits) {
     const key = grouped.has(commit.type) ? commit.type : 'other';
     grouped.get(key).push(commit);
   }
 
-  const lines = [tag, ''];
+  const lines = [];
 
   for (const section of SECTION_ORDER) {
     const items = grouped.get(section.key);
@@ -175,7 +175,7 @@ function main() {
   const commits = collectCommits(range);
   const contributors = collectContributors(range);
   const compareUrl = buildCompareUrl(previousTag, tag);
-  const notes = buildNotes({ tag, commits, contributors, compareUrl });
+  const notes = buildNotes({ commits, contributors, compareUrl });
 
   process.stdout.write(notes);
 
