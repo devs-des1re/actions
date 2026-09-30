@@ -23,6 +23,10 @@ inputs:
     description: When true, render the release notes and skip publishing.
     required: false
     default: 'false'
+  custom-message:
+    description: Optional markdown shown at the top of the release notes, e.g. install instructions. Ignored when empty.
+    required: false
+    default: ''
 
 outputs:
   release-url:
@@ -42,5 +46,6 @@ runs:
         INPUT_PREVIOUS_TAG: ${{ inputs.previous-tag }}
         INPUT_PRERELEASE_BRANCH: ${{ inputs.prerelease-branch }}
         INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_CUSTOM_MESSAGE: ${{ inputs.custom-message }}
         GH_TOKEN: ${{ inputs.token || github.token }}
       run: node "${{ github.action_path }}/scripts/releaselog.mjs"

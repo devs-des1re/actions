@@ -2,7 +2,7 @@ name: releaselog
 
 on:
   push:
-    tags: ['*']
+    tags: ["*"]
 
 permissions:
   contents: write
@@ -19,3 +19,29 @@ jobs:
       - uses: ./releaselog
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          custom-message: |
+            ## Usage
+
+            Add this to `.github/workflows/<name>.yml`:
+
+            ```yaml
+            on:
+              push:
+                tags: ["*"]
+
+            permissions:
+              contents: write
+
+            jobs:
+              release:
+                runs-on: ubuntu-latest
+                steps:
+                  - uses: actions/checkout@v4
+                    with:
+                      fetch-depth: 0
+                      fetch-tags: true
+
+                  - uses: devs-des1re/actions/releaselog@v1
+                    with:
+                      token: ${{ secrets.GITHUB_TOKEN }}
+            ```
