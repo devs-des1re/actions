@@ -94,18 +94,27 @@ function collectCommits(range) {
 }
 
 function collectContributors(range) {
-  const raw = gitOrNull(['shortlog', '-sne', range]);
+  const raw = gitOrNull(['log', '--no-merges', '--pretty=format:%ae%x1f%an', range]);
   if (!raw) return [];
 
-  return raw
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.trim().match(/^(\d+)\s+(.*?)\s*<.*>$/);
-      if (!match) return null;
-      return { name: match[2].trim(), commits: Number(match[1]) };
+  const byEmail = new Map();
+  for (const line of raw.split('\n')) {
+    if (!line) continue;
+    const [email, name] = line.split('\x1f');
+    const key = (email || name || '').toLowerCase();
+    if (!key) continue;
+    const entry = byEmail.get(key) || { commits: 0, names: new Map() };
+    entry.commits += 1;
+    const display = name || email;
+    entry.names.set(display, (entry.names.get(display) || 0) + 1);
+    byEmail.set(key, entry);
+  }
+
+  return [...byEmail.values()]
+    .map((entry) => {
+      const name = [...entry.names.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      return { name, commits: entry.commits };
     })
-    .filter(Boolean)
     .sort((a, b) => b.commits - a.commits);
 }
 
