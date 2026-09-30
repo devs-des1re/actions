@@ -1,0 +1,21 @@
+name: releaselog
+
+on:
+  push:
+    tags: ['*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: ./releaselog
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
