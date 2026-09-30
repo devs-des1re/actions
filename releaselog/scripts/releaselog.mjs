@@ -12,7 +12,10 @@ const SECTION_ORDER = [
 ];
 
 function git(args) {
-  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
 }
 
 function gitOrNull(args) {
