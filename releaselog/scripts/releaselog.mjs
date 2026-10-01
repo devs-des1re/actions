@@ -7,8 +7,8 @@ import { join } from "node:path";
 const SECTION_ORDER = [
   { key: "feat", heading: "New Features" },
   { key: "fix", heading: "Bug Fixes" },
-  { key: "docs", heading: "Doc Changes" },
-  { key: "other", heading: "Others" },
+  { key: "docs", heading: "Docs Changes" },
+  { key: "other", heading: "Other Changes" },
 ];
 
 function git(args) {
