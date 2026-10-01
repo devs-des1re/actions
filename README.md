@@ -1,6 +1,7 @@
 <div align="center">
 
 # actions
+
 Reusable GitHub Actions and workflows for any repository.
 
 [![Version](https://img.shields.io/github/v/tag/devs-des1re/actions?label=version)](https://github.com/devs-des1re/actions/releases)
@@ -8,8 +9,6 @@ Reusable GitHub Actions and workflows for any repository.
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
-
----
 
 ## Usage
 
