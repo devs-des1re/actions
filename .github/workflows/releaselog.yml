@@ -7,18 +7,35 @@ on:
 permissions:
   contents: write
 
+env:
+  PRERELEASE_BRANCH: dev
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve checkout ref
+        id: ref
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "Pre-release tag detected; taking code from ${PRERELEASE_BRANCH}."
+            echo "ref=${PRERELEASE_BRANCH}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Stable tag detected; taking code from ${GITHUB_REF_NAME}."
+            echo "ref=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
       - uses: ./releaselog
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease-branch: ${{ env.PRERELEASE_BRANCH }}
           custom-message: |
             ## Usage
 
@@ -36,8 +53,18 @@ jobs:
               release:
                 runs-on: ubuntu-latest
                 steps:
+                  - name: Resolve checkout ref
+                    id: ref
+                    run: |
+                      if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+                        echo "ref=dev" >> "$GITHUB_OUTPUT"
+                      else
+                        echo "ref=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+                      fi
+
                   - uses: actions/checkout@v4
                     with:
+                      ref: REF_FROM_STEP_OUTPUT
                       fetch-depth: 0
                       fetch-tags: true
 
@@ -45,3 +72,5 @@ jobs:
                     with:
                       token: GITHUB_TOKEN
             ```
+
+            Pre-release tags (containing `-`) take the code from `dev`.
