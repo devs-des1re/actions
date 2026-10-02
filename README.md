@@ -112,9 +112,13 @@ The previous tag is chosen so that releases compare like-for-like:
 
 - A **stable** release compares against the previous stable release. If the most
   recent tag is a pre-release, it is skipped — e.g. `v0.2.0` compares against
-  `v0.1.1`, not `v0.2.0-beta.2`.
-- A **pre-release** compares against the nearest tag of any kind, so successive
-  betas chain — e.g. `v0.2.0-beta.2` compares against `v0.2.0-beta.1`.
+  `v0.1.1`, not `v0.2.0-rc.1`.
+- A **pre-release** compares against the most recent pre-release of the same
+  version base. Successive betas, then release candidates, chain together —
+  e.g. `v0.2.0-beta.2` compares against `v0.2.0-beta.1`, and `v0.2.0-rc.1`
+  compares against `v0.2.0-beta.2`.
+- If a pre-release has no earlier pre-release for its base (e.g. a brand new
+  `v0.3.0-beta.1`), it falls back to the previous stable release.
 
 Example result for `v1.2.0`:
 

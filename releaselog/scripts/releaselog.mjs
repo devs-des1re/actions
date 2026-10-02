@@ -81,26 +81,38 @@ function resolvePreviousTag(tag) {
   const current = parseSemver(tag);
   const currentIsStable = current ? current.stable : true;
 
-  const candidates = merged
+  const parsed = merged
     .split("\n")
     .map((line) => line.trim())
-    .filter((candidate) => {
-      if (!candidate || candidate === tag) return false;
-      const parsed = parseSemver(candidate);
-      if (!parsed) return false;
-      if (currentIsStable && !parsed.stable) return false;
-      return true;
-    });
+    .filter((candidate) => candidate && candidate !== tag)
+    .map((candidate) => ({ tag: candidate, semver: parseSemver(candidate) }))
+    .filter((entry) => entry.semver);
+
+  let candidates;
+  if (currentIsStable) {
+    candidates = parsed.filter((entry) => entry.semver.stable);
+  } else {
+    const base = `${current.major}.${current.minor}.${current.patch}`;
+    candidates = parsed.filter(
+      (entry) =>
+        !entry.semver.stable &&
+        `${entry.semver.major}.${entry.semver.minor}.${entry.semver.patch}` ===
+          base,
+    );
+    if (!candidates.length) {
+      candidates = parsed.filter((entry) => entry.semver.stable);
+    }
+  }
 
   let best = null;
   let bestDistance = Infinity;
-  for (const candidate of candidates) {
+  for (const entry of candidates) {
     const count = Number(
-      gitOrNull(["rev-list", "--count", `${candidate}..${tag}`]),
+      gitOrNull(["rev-list", "--count", `${entry.tag}..${tag}`]),
     );
     if (Number.isFinite(count) && count < bestDistance) {
       bestDistance = count;
-      best = candidate;
+      best = entry.tag;
     }
   }
 
