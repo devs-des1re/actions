@@ -117,7 +117,7 @@ Example result for `v1.2.0`:
 
 ## Contributors
 
-- Arjun Patel (5 commits)
+- @devs-des1re ([5 commits](https://github.com/devs-des1re/actions/commits/v1.2.0?author=...))
 
 ## Full Change Log
 

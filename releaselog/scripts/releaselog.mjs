@@ -26,6 +26,18 @@ function gitOrNull(args) {
   }
 }
 
+function ghJson(args) {
+  try {
+    const out = execFileSync("gh", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return out ? JSON.parse(out) : null;
+  } catch {
+    return null;
+  }
+}
+
 function env(name, fallback = "") {
   const value = process.env[name];
   return value === undefined || value === "" ? fallback : value;
@@ -109,7 +121,7 @@ function collectContributors(range) {
   const raw = gitOrNull([
     "log",
     "--no-merges",
-    "--pretty=format:%ae%x1f%an",
+    "--pretty=format:%ae%x1f%an%x1f%H",
     range,
   ]);
   if (!raw) return [];
@@ -117,10 +129,15 @@ function collectContributors(range) {
   const byEmail = new Map();
   for (const line of raw.split("\n")) {
     if (!line) continue;
-    const [email, name] = line.split("\x1f");
+    const [email, name, sha] = line.split("\x1f");
     const key = (email || name || "").toLowerCase();
     if (!key) continue;
-    const entry = byEmail.get(key) || { email, commits: 0, names: new Map() };
+    const entry = byEmail.get(key) || {
+      email,
+      sha: sha || "",
+      commits: 0,
+      names: new Map(),
+    };
     entry.commits += 1;
     const display = name || email;
     entry.names.set(display, (entry.names.get(display) || 0) + 1);
@@ -130,9 +147,22 @@ function collectContributors(range) {
   return [...byEmail.values()]
     .map((entry) => {
       const name = [...entry.names.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      return { name, email: entry.email, commits: entry.commits };
+      return { name, email: entry.email, sha: entry.sha, commits: entry.commits };
     })
     .sort((a, b) => b.commits - a.commits);
+}
+
+const usernameCache = new Map();
+
+function resolveUsername(sha) {
+  const repo = env("GITHUB_REPOSITORY");
+  if (!repo || !sha) return "";
+  if (usernameCache.has(sha)) return usernameCache.get(sha);
+
+  const data = ghJson(["api", `repos/${repo}/commits/${sha}`]);
+  const login = data?.author?.login || "";
+  usernameCache.set(sha, login);
+  return login;
 }
 
 function buildAuthorUrl(tag, email) {
@@ -181,7 +211,9 @@ function buildNotes({ customMessage, tag, commits, contributors, compareUrl }) {
       const label = person.commits === 1 ? "commit" : "commits";
       const count = `${person.commits} ${label}`;
       const url = buildAuthorUrl(tag, person.email);
-      lines.push(`- ${person.name} (${url ? `[${count}](${url})` : count})`);
+      const login = resolveUsername(person.sha);
+      const who = login ? `@${login}` : person.name;
+      lines.push(`- ${who} (${url ? `[${count}](${url})` : count})`);
     }
     lines.push("");
   }
