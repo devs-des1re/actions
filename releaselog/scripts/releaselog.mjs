@@ -57,7 +57,19 @@ function resolveTag() {
   return tag;
 }
 
-const SEMVER_RE = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+
+function parseSemver(tag) {
+  const match = tag.match(SEMVER_RE);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] || "",
+    stable: !match[4],
+  };
+}
 
 function resolvePreviousTag(tag) {
   const explicit = env("INPUT_PREVIOUS_TAG");
@@ -66,13 +78,19 @@ function resolvePreviousTag(tag) {
   const merged = gitOrNull(["tag", "--merged", `${tag}^`]);
   if (!merged) return null;
 
+  const current = parseSemver(tag);
+  const currentIsStable = current ? current.stable : true;
+
   const candidates = merged
     .split("\n")
     .map((line) => line.trim())
-    .filter(
-      (candidate) =>
-        candidate && candidate !== tag && SEMVER_RE.test(candidate),
-    );
+    .filter((candidate) => {
+      if (!candidate || candidate === tag) return false;
+      const parsed = parseSemver(candidate);
+      if (!parsed) return false;
+      if (currentIsStable && !parsed.stable) return false;
+      return true;
+    });
 
   let best = null;
   let bestDistance = Infinity;
