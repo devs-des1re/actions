@@ -109,7 +109,7 @@ Example result for `v1.2.0`:
 ```markdown
 ## New Features
 
-- feat: add dark mode toggle (a1b2c3d)
+- feat: add dark mode toggle (#12) (a1b2c3d)
 
 ## Bug Fixes
 

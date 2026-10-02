@@ -112,6 +112,24 @@ function parseType(subject) {
   return match ? match[1].toLowerCase() : "other";
 }
 
+function parsePrFromSubject(subject) {
+  const match = subject.match(/\(#(\d+)\)\s*$/);
+  return match ? Number(match[1]) : null;
+}
+
+const prCache = new Map();
+
+function resolvePr(sha) {
+  const repo = env("GITHUB_REPOSITORY");
+  if (!repo || !sha) return null;
+  if (prCache.has(sha)) return prCache.get(sha);
+
+  const data = ghJson(["api", `repos/${repo}/commits/${sha}/pulls`]);
+  const number = Array.isArray(data) && data[0] ? data[0].number : null;
+  prCache.set(sha, number);
+  return number;
+}
+
 function collectCommits(range) {
   const raw = gitOrNull([
     "log",
@@ -126,11 +144,15 @@ function collectCommits(range) {
     .filter(Boolean)
     .map((line) => {
       const [hash, subject] = line.split("\x1f");
+      const text = subject || "";
+      const fromSubject = parsePrFromSubject(text);
       return {
         hash,
         short: hash.slice(0, 7),
-        subject: subject || "",
-        type: parseType(subject || ""),
+        subject: text,
+        type: parseType(text),
+        pr: fromSubject !== null ? fromSubject : resolvePr(hash),
+        prFromSubject: fromSubject !== null,
       };
     });
 }
@@ -218,7 +240,8 @@ function buildNotes({ customMessage, tag, commits, contributors, compareUrl }) {
     if (!items.length) continue;
     lines.push(`## ${section.heading}`);
     for (const item of items) {
-      lines.push(`- ${item.subject} (${item.short})`);
+      const pr = item.pr && !item.prFromSubject ? ` (#${item.pr})` : "";
+      lines.push(`- ${item.subject}${pr} (${item.short})`);
     }
     lines.push("");
   }
