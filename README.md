@@ -1,6 +1,7 @@
 <div align="center">
 
 # actions
+
 Reusable GitHub Actions and workflows for any repository.
 
 [![Version](https://img.shields.io/github/v/tag/devs-des1re/actions?label=version)](https://github.com/devs-des1re/actions/releases)
@@ -8,8 +9,6 @@ Reusable GitHub Actions and workflows for any repository.
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
-
----
 
 ## Usage
 
@@ -97,12 +96,20 @@ Tags containing `-` (e.g. `v1.2.0-rc.1`) are published as a pre-release on the
 `dev` branch. Commits are grouped by conventional commit prefix (`feat:`,
 `fix:`, `docs:`, and others) between the previous tag and the new one.
 
+The previous tag is chosen so that releases compare like-for-like:
+
+- A **stable** release compares against the previous stable release. If the most
+  recent tag is a pre-release, it is skipped — e.g. `v0.2.0` compares against
+  `v0.1.1`, not `v0.2.0-beta.2`.
+- A **pre-release** compares against the nearest tag of any kind, so successive
+  betas chain — e.g. `v0.2.0-beta.2` compares against `v0.2.0-beta.1`.
+
 Example result for `v1.2.0`:
 
 ```markdown
 ## New Features
 
-- feat: add dark mode toggle (a1b2c3d)
+- feat: add dark mode toggle (#12) (a1b2c3d)
 
 ## Bug Fixes
 
@@ -118,7 +125,7 @@ Example result for `v1.2.0`:
 
 ## Contributors
 
-- Arjun Patel (5 commits)
+- @devs-des1re ([5 commits](https://github.com/devs-des1re/actions/commits/v1.2.0?author=...))
 
 ## Full Change Log
 
