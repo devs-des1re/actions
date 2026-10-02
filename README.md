@@ -44,8 +44,18 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve checkout ref
+        id: ref
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "ref=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -54,7 +64,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-`fetch-depth: 0` and `permissions: contents: write` are required.
+`fetch-depth: 0` and `permissions: contents: write` are required. Pre-release
+tags (containing `-`) check out the `dev` branch so the release is built from
+`dev`; stable tags check out the tagged commit.
 
 ### Inputs
 
