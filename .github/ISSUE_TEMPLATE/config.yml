@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing guide
+    url: https://github.com/devs-des1re/actions/blob/master/CONTRIBUTING.md
+    about: Read this before opening a pull request.

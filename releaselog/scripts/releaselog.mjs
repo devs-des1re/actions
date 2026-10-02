@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
-import { appendFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { execFileSync } from "node:child_process";
+import { appendFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SECTION_ORDER = [
-  { key: 'feat', heading: 'New Features' },
-  { key: 'fix', heading: 'Bug Fixes' },
-  { key: 'docs', heading: 'Doc Changes' },
-  { key: 'other', heading: 'Others' },
+  { key: "feat", heading: "New Features" },
+  { key: "fix", heading: "Bug Fixes" },
+  { key: "docs", heading: "Docs Changes" },
+  { key: "other", heading: "Other Changes" },
 ];
 
 function git(args) {
-  return execFileSync('git', args, {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 }
 
@@ -26,41 +26,78 @@ function gitOrNull(args) {
   }
 }
 
-function env(name, fallback = '') {
+function ghJson(args) {
+  try {
+    const out = execFileSync("gh", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return out ? JSON.parse(out) : null;
+  } catch {
+    return null;
+  }
+}
+
+function env(name, fallback = "") {
   const value = process.env[name];
-  return value === undefined || value === '' ? fallback : value;
+  return value === undefined || value === "" ? fallback : value;
 }
 
 function tagExists(tag) {
-  return gitOrNull(['rev-parse', '--verify', `refs/tags/${tag}`]) !== null;
+  return gitOrNull(["rev-parse", "--verify", `refs/tags/${tag}`]) !== null;
 }
 
 function resolveTag() {
-  const tag = env('INPUT_TAG') || env('GITHUB_REF_NAME');
+  const tag = env("INPUT_TAG") || env("GITHUB_REF_NAME");
   if (!tag) {
-    throw new Error('No tag provided. Set the "tag" input or run on a tag push event.');
+    throw new Error(
+      'No tag provided. Set the "tag" input or run on a tag push event.',
+    );
   }
   return tag;
 }
 
-const SEMVER_RE = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+
+function parseSemver(tag) {
+  const match = tag.match(SEMVER_RE);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] || "",
+    stable: !match[4],
+  };
+}
 
 function resolvePreviousTag(tag) {
-  const explicit = env('INPUT_PREVIOUS_TAG');
+  const explicit = env("INPUT_PREVIOUS_TAG");
   if (explicit) return explicit;
 
-  const merged = gitOrNull(['tag', '--merged', `${tag}^`]);
+  const merged = gitOrNull(["tag", "--merged", `${tag}^`]);
   if (!merged) return null;
 
+  const current = parseSemver(tag);
+  const currentIsStable = current ? current.stable : true;
+
   const candidates = merged
-    .split('\n')
+    .split("\n")
     .map((line) => line.trim())
-    .filter((candidate) => candidate && candidate !== tag && SEMVER_RE.test(candidate));
+    .filter((candidate) => {
+      if (!candidate || candidate === tag) return false;
+      const parsed = parseSemver(candidate);
+      if (!parsed) return false;
+      if (currentIsStable && !parsed.stable) return false;
+      return true;
+    });
 
   let best = null;
   let bestDistance = Infinity;
   for (const candidate of candidates) {
-    const count = Number(gitOrNull(['rev-list', '--count', `${candidate}..${tag}`]));
+    const count = Number(
+      gitOrNull(["rev-list", "--count", `${candidate}..${tag}`]),
+    );
     if (Number.isFinite(count) && count < bestDistance) {
       bestDistance = count;
       best = candidate;
@@ -72,38 +109,75 @@ function resolvePreviousTag(tag) {
 
 function parseType(subject) {
   const match = subject.match(/^([a-zA-Z]+)(\([^)]*\))?!?:\s*/);
-  return match ? match[1].toLowerCase() : 'other';
+  return match ? match[1].toLowerCase() : "other";
+}
+
+function parsePrFromSubject(subject) {
+  const match = subject.match(/\(#(\d+)\)\s*$/);
+  return match ? Number(match[1]) : null;
+}
+
+const prCache = new Map();
+
+function resolvePr(sha) {
+  const repo = env("GITHUB_REPOSITORY");
+  if (!repo || !sha) return null;
+  if (prCache.has(sha)) return prCache.get(sha);
+
+  const data = ghJson(["api", `repos/${repo}/commits/${sha}/pulls`]);
+  const number = Array.isArray(data) && data[0] ? data[0].number : null;
+  prCache.set(sha, number);
+  return number;
 }
 
 function collectCommits(range) {
-  const raw = gitOrNull(['log', '--no-merges', '--pretty=format:%H%x1f%s', range]);
+  const raw = gitOrNull([
+    "log",
+    "--no-merges",
+    "--pretty=format:%H%x1f%s",
+    range,
+  ]);
   if (!raw) return [];
 
   return raw
-    .split('\n')
+    .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [hash, subject] = line.split('\x1f');
+      const [hash, subject] = line.split("\x1f");
+      const text = subject || "";
+      const fromSubject = parsePrFromSubject(text);
       return {
         hash,
         short: hash.slice(0, 7),
-        subject: subject || '',
-        type: parseType(subject || ''),
+        subject: text,
+        type: parseType(text),
+        pr: fromSubject !== null ? fromSubject : resolvePr(hash),
+        prFromSubject: fromSubject !== null,
       };
     });
 }
 
 function collectContributors(range) {
-  const raw = gitOrNull(['log', '--no-merges', '--pretty=format:%ae%x1f%an', range]);
+  const raw = gitOrNull([
+    "log",
+    "--no-merges",
+    "--pretty=format:%ae%x1f%an%x1f%H",
+    range,
+  ]);
   if (!raw) return [];
 
   const byEmail = new Map();
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     if (!line) continue;
-    const [email, name] = line.split('\x1f');
-    const key = (email || name || '').toLowerCase();
+    const [email, name, sha] = line.split("\x1f");
+    const key = (email || name || "").toLowerCase();
     if (!key) continue;
-    const entry = byEmail.get(key) || { commits: 0, names: new Map() };
+    const entry = byEmail.get(key) || {
+      email,
+      sha: sha || "",
+      commits: 0,
+      names: new Map(),
+    };
     entry.commits += 1;
     const display = name || email;
     entry.names.set(display, (entry.names.get(display) || 0) + 1);
@@ -113,32 +187,52 @@ function collectContributors(range) {
   return [...byEmail.values()]
     .map((entry) => {
       const name = [...entry.names.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      return { name, commits: entry.commits };
+      return { name, email: entry.email, sha: entry.sha, commits: entry.commits };
     })
     .sort((a, b) => b.commits - a.commits);
 }
 
+const usernameCache = new Map();
+
+function resolveUsername(sha) {
+  const repo = env("GITHUB_REPOSITORY");
+  if (!repo || !sha) return "";
+  if (usernameCache.has(sha)) return usernameCache.get(sha);
+
+  const data = ghJson(["api", `repos/${repo}/commits/${sha}`]);
+  const login = data?.author?.login || "";
+  usernameCache.set(sha, login);
+  return login;
+}
+
+function buildAuthorUrl(tag, email) {
+  const server = env("GITHUB_SERVER_URL", "https://github.com");
+  const repo = env("GITHUB_REPOSITORY", "");
+  if (!repo || !email) return "";
+  return `${server}/${repo}/commits/${tag}?author=${encodeURIComponent(email)}`;
+}
+
 function buildCompareUrl(previousTag, tag) {
-  const server = env('GITHUB_SERVER_URL', 'https://github.com');
-  const repo = env('GITHUB_REPOSITORY', '');
-  if (!repo) return '';
+  const server = env("GITHUB_SERVER_URL", "https://github.com");
+  const repo = env("GITHUB_REPOSITORY", "");
+  if (!repo) return "";
   if (previousTag) {
     return `${server}/${repo}/compare/${previousTag}...${tag}`;
   }
   return `${server}/${repo}/commits/${tag}`;
 }
 
-function buildNotes({ customMessage, commits, contributors, compareUrl }) {
+function buildNotes({ customMessage, tag, commits, contributors, compareUrl }) {
   const grouped = new Map(SECTION_ORDER.map((section) => [section.key, []]));
   for (const commit of commits) {
-    const key = grouped.has(commit.type) ? commit.type : 'other';
+    const key = grouped.has(commit.type) ? commit.type : "other";
     grouped.get(key).push(commit);
   }
 
   const lines = [];
 
   if (customMessage) {
-    lines.push(customMessage.trim(), '');
+    lines.push(customMessage.trim(), "");
   }
 
   for (const section of SECTION_ORDER) {
@@ -146,49 +240,65 @@ function buildNotes({ customMessage, commits, contributors, compareUrl }) {
     if (!items.length) continue;
     lines.push(`## ${section.heading}`);
     for (const item of items) {
-      lines.push(`- ${item.subject} (${item.short})`);
+      const pr = item.pr && !item.prFromSubject ? ` (#${item.pr})` : "";
+      lines.push(`- ${item.subject}${pr} (${item.short})`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   if (contributors.length) {
-    lines.push('## Contributors');
+    lines.push("## Contributors");
     for (const person of contributors) {
-      const label = person.commits === 1 ? 'commit' : 'commits';
-      lines.push(`- ${person.name} (${person.commits} ${label})`);
+      const label = person.commits === 1 ? "commit" : "commits";
+      const count = `${person.commits} ${label}`;
+      const url = buildAuthorUrl(tag, person.email);
+      const login = resolveUsername(person.sha);
+      const who = login ? `@${login}` : person.name;
+      lines.push(`- ${who} (${url ? `[${count}](${url})` : count})`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   if (compareUrl) {
-    lines.push('## Full Change Log');
+    lines.push("## Full Change Log");
     lines.push(compareUrl);
-    lines.push('');
+    lines.push("");
   }
 
-  return lines.join('\n').trim() + '\n';
+  return lines.join("\n").trim() + "\n";
 }
 
 function publish({ tag, notes, isPrerelease, branch }) {
-  const notesFile = join(tmpdir(), `releaselog-${tag.replace(/[^\w.-]/g, '_')}.md`);
-  writeFileSync(notesFile, notes, 'utf8');
+  const notesFile = join(
+    tmpdir(),
+    `releaselog-${tag.replace(/[^\w.-]/g, "_")}.md`,
+  );
+  writeFileSync(notesFile, notes, "utf8");
 
-  const args = ['release', 'create', tag, '--title', tag, '--notes-file', notesFile];
-  if (isPrerelease) args.push('--prerelease');
+  const args = [
+    "release",
+    "create",
+    tag,
+    "--title",
+    tag,
+    "--notes-file",
+    notesFile,
+  ];
+  if (isPrerelease) args.push("--prerelease");
 
   if (tagExists(tag)) {
-    args.push('--verify-tag');
+    args.push("--verify-tag");
   } else if (isPrerelease && branch) {
-    args.push('--target', branch);
+    args.push("--target", branch);
   }
 
-  return execFileSync('gh', args, { encoding: 'utf8' }).trim();
+  return execFileSync("gh", args, { encoding: "utf8" }).trim();
 }
 
 function setOutput(name, value) {
   const outputFile = process.env.GITHUB_OUTPUT;
   if (outputFile) {
-    appendFileSync(outputFile, `${name}=${value}\n`, 'utf8');
+    appendFileSync(outputFile, `${name}=${value}\n`, "utf8");
   } else {
     process.stdout.write(`::set-output name=${name}::${value}\n`);
   }
@@ -196,10 +306,10 @@ function setOutput(name, value) {
 
 function main() {
   const tag = resolveTag();
-  const isPrerelease = tag.includes('-');
-  const branch = env('INPUT_PRERELEASE_BRANCH', 'dev');
-  const dryRun = env('INPUT_DRY_RUN', 'false').toLowerCase() === 'true';
-  const customMessage = env('INPUT_CUSTOM_MESSAGE');
+  const isPrerelease = tag.includes("-");
+  const branch = env("INPUT_PRERELEASE_BRANCH", "dev");
+  const dryRun = env("INPUT_DRY_RUN", "false").toLowerCase() === "true";
+  const customMessage = env("INPUT_CUSTOM_MESSAGE");
 
   const previousTag = resolvePreviousTag(tag);
   const range = previousTag ? `${previousTag}..${tag}` : tag;
@@ -207,19 +317,25 @@ function main() {
   const commits = collectCommits(range);
   const contributors = collectContributors(range);
   const compareUrl = buildCompareUrl(previousTag, tag);
-  const notes = buildNotes({ customMessage, commits, contributors, compareUrl });
+  const notes = buildNotes({
+    customMessage,
+    tag,
+    commits,
+    contributors,
+    compareUrl,
+  });
 
   process.stdout.write(notes);
 
-  setOutput('is-prerelease', String(isPrerelease));
+  setOutput("is-prerelease", String(isPrerelease));
 
   if (dryRun) {
-    setOutput('release-url', '');
+    setOutput("release-url", "");
     return;
   }
 
   const url = publish({ tag, notes, isPrerelease, branch });
-  setOutput('release-url', url);
+  setOutput("release-url", url);
 }
 
 main();
