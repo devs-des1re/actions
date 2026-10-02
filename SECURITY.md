@@ -1,16 +1,5 @@
 # Security Policy
 
-## Supported versions
-
-This repository ships reusable GitHub Actions and workflows. Security fixes are
-applied to the latest release and the floating major tag (`v1`). Older versions
-are not maintained.
-
-| Version        | Supported |
-| -------------- | --------- |
-| `v1` (latest)  | Yes       |
-| Older releases | No        |
-
 ## Reporting a vulnerability
 
 Please do **not** report security vulnerabilities through public GitHub issues,
